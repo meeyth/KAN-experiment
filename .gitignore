@@ -1,0 +1,31 @@
+# Virtual environment
+venv/
+.venv/
+env/
+
+# Compiled Python files
+__pycache__/
+*.pyc
+*.pyd
+*.so
+
+# IDE/Editor specific files
+.idea/
+.vscode/
+*.sublime-project
+*.sublime-workspace
+*.swp
+
+# Log files and temporary data
+*.log
+tmp/
+*.sqlite3 # Example for SQLite databases
+
+# Dependency management files
+build/
+dist/
+*.egg-info/
+
+# Sensitive information (example)
+.env
+config.ini

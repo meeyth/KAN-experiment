@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive KAN Explainer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Chosen Palette: Slate Gray & Sky Blue -->
+    <!-- Application Structure Plan: The application is structured as an educational dashboard, separating concerns into distinct sections for better user flow. 1) Header: Provides context. 2) Main Dashboard (2-col grid): Left column for 'Controls' (Target Function, Hyperparameters) and right for 'Visuals & Metrics'. This grouping helps users configure the model and immediately see the results. 3) Training & Playback Section: A dedicated area for training controls and a timeline scrubber. This separates the 'setup' phase from the 'analysis' phase. This structure is chosen to guide the user logically from configuration to training and finally to analysis, making the complex topic more digestible. -->
+    <!-- Visualization & Content Choices: Report Info: KAN learning process -> Goal: Compare KAN output vs. target function -> Viz/Presentation Method: Chart.js Line Chart -> Interaction: Tooltips on hover, dynamic updates during training -> Justification: Chart.js provides superior aesthetics, responsiveness, and interactivity over manual canvas drawing. | Report Info: Key model metrics (Loss, Epoch, etc.) -> Goal: Inform user of performance -> Viz/Presentation Method: Styled HTML cards -> Interaction: Real-time value updates -> Justification: Cards provide a clear, scannable view of key performance indicators. | Report Info: Hyperparameter effects -> Goal: Allow user exploration -> Viz/Presentation Method: HTML sliders & interactive buttons -> Interaction: User can change values and retrain -> Justification: Sliders provide an intuitive way to explore the parameter space. -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
+        .chart-container { position: relative; width: 100%; height: 100%; min-height: 300px; max-height: 500px; }
+        .slider-thumb::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 16px; height: 16px; background: #3b82f6; border-radius: 9999px; cursor: pointer; margin-top: -6px; }
+        .slider-thumb::-moz-range-thumb { width: 16px; height: 16px; background: #3b82f6; border-radius: 9999px; cursor: pointer; }
+        .control-btn { transition: all 0.2s ease-in-out; }
+        .control-btn:disabled { background-color: #94a3b8; cursor: not-allowed; }
+        .tab-btn { transition: background-color 0.2s ease-in-out, color 0.2s ease-in-out; }
+        .tab-btn-active { background-color: #3b82f6; color: white; }
+    </style>
+</head>
+<body class="text-slate-800">
+
+    <div class="max-w-7xl mx-auto p-4 md:p-8">
+
+        <header class="text-center mb-8">
+            <h1 class="text-4xl font-bold text-slate-900 tracking-tight">Interactive KAN Explainer</h1>
+            <p class="mt-2 text-lg text-slate-600 max-w-3xl mx-auto">An interactive visualization of how a single-layer Kolmogorov-Arnold Network (KAN) learns to approximate a target function using B-spline activation functions.</p>
+        </header>
+
+        <main class="bg-white rounded-2xl shadow-lg p-4 sm:p-6 md:p-8">
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                
+                <div class="lg:col-span-1 flex flex-col gap-6">
+                    <div class="p-4 bg-slate-50 rounded-xl border border-slate-200">
+                        <h3 class="font-semibold text-lg mb-3 text-slate-900">1. Target Function</h3>
+                        <p class="text-sm text-slate-600 mb-4">Choose a preset function for the model to learn, or define your own using standard Javascript syntax (e.g., `Math.sin(x*Math.PI)`).</p>
+                        <div class="flex flex-wrap gap-2 mb-4" id="preset-buttons">
+                           <button data-fn="Math.sin(x * Math.PI * 2)" class="tab-btn px-3 py-1 text-sm font-medium rounded-md bg-slate-200 text-slate-700">Sine</button>
+                           <button data-fn="Math.sign(x)" class="tab-btn px-3 py-1 text-sm font-medium rounded-md bg-slate-200 text-slate-700">Step</button>
+                           <button data-fn="x > 0 ? 1 : -1" class="tab-btn px-3 py-1 text-sm font-medium rounded-md bg-slate-200 text-slate-700">Square</button>
+                           <button data-fn="2 * x" class="tab-btn px-3 py-1 text-sm font-medium rounded-md bg-slate-200 text-slate-700">Linear</button>
+                        </div>
+                        <input type="text" id="target-function-input" class="w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm" value="Math.sin(x * Math.PI * 2)">
+                    </div>
+
+                    <div class="p-4 bg-slate-50 rounded-xl border border-slate-200">
+                        <h3 class="font-semibold text-lg mb-4 text-slate-900">2. Model Hyperparameters</h3>
+                        <div class="space-y-4">
+                            <div>
+                                <label for="num-basis-slider" class="flex justify-between text-sm font-medium text-slate-700"><span>Number of Basis Functions</span><span id="num-basis-label" class="font-bold text-blue-600">5</span></label>
+                                <input type="range" id="num-basis-slider" min="2" max="20" value="5" class="w-full h-1 bg-slate-200 rounded-lg appearance-none cursor-pointer slider-thumb">
+                            </div>
+                            <div>
+                                <label for="degree-slider" class="flex justify-between text-sm font-medium text-slate-700"><span>Spline Degree</span><span id="degree-label" class="font-bold text-blue-600">3</span></label>
+                                <input type="range" id="degree-slider" min="0" max="5" value="3" class="w-full h-1 bg-slate-200 rounded-lg appearance-none cursor-pointer slider-thumb">
+                            </div>
+                             <div>
+                                <label for="grid-size-slider" class="flex justify-between text-sm font-medium text-slate-700"><span>Grid Size</span><span id="grid-size-label" class="font-bold text-blue-600">100</span></label>
+                                <input type="range" id="grid-size-slider" min="10" max="500" value="100" step="10" class="w-full h-1 bg-slate-200 rounded-lg appearance-none cursor-pointer slider-thumb">
+                            </div>
+                        </div>
+                    </div>
+
+                     <div class="p-4 bg-slate-50 rounded-xl border border-slate-200">
+                        <h3 class="font-semibold text-lg mb-3 text-slate-900">3. Training</h3>
+                        <p class="text-sm text-slate-600 mb-4">Start the training process. The model will try to minimize the difference between its output and the target function.</p>
+                        <div class="flex items-center gap-3">
+                            <button id="start-btn" class="control-btn w-full bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">Start Training</button>
+                            <button id="stop-btn" class="control-btn w-full bg-red-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500" disabled>Stop</button>
+                            <button id="reset-btn" class="control-btn w-full bg-slate-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-500">Reset</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="lg:col-span-2 flex flex-col gap-6">
+                    <div class="p-4 border border-slate-200 rounded-xl flex-grow h-full">
+                        <h3 class="font-semibold text-lg mb-2 text-slate-900">KAN Output vs. Target Function</h3>
+                        <div class="chart-container">
+                            <canvas id="main-chart"></canvas>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+                        <div class="p-4 bg-slate-50 rounded-xl border border-slate-200">
+                            <h4 class="text-sm font-medium text-slate-500">Loss (MSE)</h4>
+                            <p id="loss-val" class="text-2xl font-semibold text-slate-900">-</p>
+                        </div>
+                        <div class="p-4 bg-slate-50 rounded-xl border border-slate-200">
+                            <h4 class="text-sm font-medium text-slate-500">Epoch</h4>
+                            <p id="epoch-val" class="text-2xl font-semibold text-slate-900">0</p>
+                        </div>
+                        <div class="p-4 bg-slate-50 rounded-xl border border-slate-200">
+                            <h4 class="text-sm font-medium text-slate-500">Bias</h4>
+                            <p id="bias-val" class="text-2xl font-semibold text-slate-900">-</p>
+                        </div>
+                        <div class="p-4 bg-slate-50 rounded-xl border border-slate-200">
+                            <h4 class="text-sm font-medium text-slate-500">Scale</h4>
+                            <p id="scale-val" class="text-2xl font-semibold text-slate-900">-</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mt-8 p-4 bg-slate-50 rounded-xl border border-slate-200">
+                <h3 class="font-semibold text-lg mb-3 text-slate-900">Training Playback</h3>
+                <div class="flex flex-col sm:flex-row items-center gap-4">
+                    <div class="flex items-center gap-2">
+                        <button id="play-btn" class="control-btn p-2 rounded-full bg-slate-200 hover:bg-slate-300"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg></button>
+                        <button id="pause-btn" class="control-btn p-2 rounded-full bg-slate-200 hover:bg-slate-300"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg></button>
+                        <button id="step-back-btn" class="control-btn p-2 rounded-full bg-slate-200 hover:bg-slate-300"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 19 2 12 11 3 11 19"></polygon><polygon points="22 19 13 12 22 3 22 19"></polygon></svg></button>
+                        <button id="step-fwd-btn" class="control-btn p-2 rounded-full bg-slate-200 hover:bg-slate-300"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 19 22 12 13 3 13 19"></polygon><polygon points="2 19 11 12 2 3 2 19"></polygon></svg></button>
+                    </div>
+                    <div class="w-full flex-grow flex items-center gap-3">
+                        <span id="frame-label" class="text-sm font-mono whitespace-nowrap">0 / 0</span>
+                        <input type="range" id="snapshot-slider" min="0" max="0" value="0" class="w-full h-1 bg-slate-200 rounded-lg appearance-none cursor-pointer slider-thumb">
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <label for="play-speed" class="text-sm">Speed:</label>
+                        <select id="play-speed" class="text-sm border border-slate-300 rounded-md p-1">
+                            <option value="100">1x</option><option value="50">2x</option><option value="25">4x</option><option value="10">10x</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+<script>
+    const state = {
+        numBasis: 5,
+        degree: 3,
+        gridSize: 100,
+        targetFnStr: 'Math.sin(x * Math.PI * 2)',
+        targetFn: (x) => Math.sin(x * Math.PI * 2),
+        bias: 0,
+        scale: 1,
+        offset: 0,
+        weights: null,
+        knots: null,
+        snapshots: [],
+        play: { playing: false, rafId: null, frameIdx: 0, delayMs: 100 },
+    };
+
+    const trainingAbort = { stop: false };
+    let chart;
+
+    const numBasisSlider = document.getElementById('num-basis-slider');
+    const degreeSlider = document.getElementById('degree-slider');
+    const gridSizeSlider = document.getElementById('grid-size-slider');
+    const targetFnInput = document.getElementById('target-function-input');
+    
+    const numBasisLabel = document.getElementById('num-basis-label');
+    const degreeLabel = document.getElementById('degree-label');
+    const gridSizeLabel = document.getElementById('grid-size-label');
+
+    const lossVal = document.getElementById('loss-val');
+    const epochVal = document.getElementById('epoch-val');
+    const biasVal = document.getElementById('bias-val');
+    const scaleVal = document.getElementById('scale-val');
+    
+    const startBtn = document.getElementById('start-btn');
+    const stopBtn = document.getElementById('stop-btn');
+    const resetBtn = document.getElementById('reset-btn');
+
+    const playBtn = document.getElementById('play-btn');
+    const pauseBtn = document.getElementById('pause-btn');
+    const stepFwdBtn = document.getElementById('step-fwd-btn');
+    const stepBackBtn = document.getElementById('step-back-btn');
+    const snapshotSlider = document.getElementById('snapshot-slider');
+    const frameLabel = document.getElementById('frame-label');
+    const playSpeed = document.getElementById('play-speed');
+    const presetButtons = document.getElementById('preset-buttons');
+
+
+    function bspline(x, i, p, knots) {
+        if (p === 0) {
+            return (x >= knots[i] && x < knots[i + 1]) ? 1 : 0;
+        }
+        const a = (x - knots[i]) / (knots[i + p] - knots[i] || 1);
+        const b = (knots[i + p + 1] - x) / (knots[i + p + 1] - knots[i + 1] || 1);
+        return a * bspline(x, i, p - 1, knots) + b * bspline(x, i + 1, p - 1, knots);
+    }
+
+    function evaluate(x, weights, bias, scale, offset) {
+        let sum = 0;
+        for (let i = 0; i < state.numBasis; i++) {
+            sum += weights[i] * bspline(x, i, state.degree, state.knots);
+        }
+        return scale * sum + bias + offset;
+    }
+
+    function initModel() {
+        state.bias = 0;
+        state.scale = 1;
+        state.offset = 0;
+        state.weights = Array.from({ length: state.numBasis }, () => (Math.random() - 0.5) * 0.1);
+        
+        const numKnots = state.numBasis + state.degree + 1;
+        state.knots = Array.from({ length: numKnots }, (_, i) => {
+            if (i < state.degree + 1) return -1;
+            if (i >= numKnots - state.degree - 1) return 1;
+            return -1 + 2 * (i - state.degree) / (state.numBasis - state.degree);
+        });
+
+        state.snapshots = [];
+        state.play.frameIdx = 0;
+        trainingAbort.stop = false;
+
+        updateUIParams();
+        renderAll();
+    }
+    
+    async function runTraining() {
+        startBtn.disabled = true;
+        stopBtn.disabled = false;
+        trainingAbort.stop = false;
+
+        const learningRate = 0.05;
+        const numEpochs = 2000;
+        const snapshotInterval = 20;
+
+        const grid = Array.from({ length: state.gridSize }, (_, i) => -1 + 2 * i / (state.gridSize - 1));
+        const target = grid.map(state.targetFn);
+        
+        state.snapshots.push({ weights: [...state.weights], bias: state.bias, scale: state.scale, offset: state.offset, epoch: 0, loss: Infinity });
+
+        for (let epoch = 1; epoch <= numEpochs && !trainingAbort.stop; epoch++) {
+            const pred = grid.map(x => evaluate(x, state.weights, state.bias, state.scale, state.offset));
+            const errors = pred.map((p, i) => p - target[i]);
+            const loss = errors.reduce((acc, e) => acc + e * e, 0) / state.gridSize;
+
+            const gradWeights = Array(state.numBasis).fill(0);
+            for (let i = 0; i < state.numBasis; i++) {
+                for (let j = 0; j < state.gridSize; j++) {
+                    gradWeights[i] += errors[j] * bspline(grid[j], i, state.degree, state.knots) * state.scale;
+                }
+                gradWeights[i] *= 2 / state.gridSize;
+            }
+
+            const splineSum = grid.map(x => {
+                let s = 0;
+                for(let i=0; i<state.numBasis; i++) s += state.weights[i] * bspline(x, i, state.degree, state.knots);
+                return s;
+            });
+
+            const gradBias = 2 * errors.reduce((a, b) => a + b, 0) / state.gridSize;
+            const gradScale = 2 * errors.reduce((acc, e, i) => acc + e * splineSum[i], 0) / state.gridSize;
+
+            for (let i = 0; i < state.numBasis; i++) {
+                state.weights[i] -= learningRate * gradWeights[i];
+            }
+            state.bias -= learningRate * gradBias;
+            state.scale -= learningRate * gradScale;
+            
+            epochVal.textContent = epoch;
+            lossVal.textContent = loss.toFixed(5);
+            
+            if (epoch % snapshotInterval === 0) {
+                 state.snapshots.push({ weights: [...state.weights], bias: state.bias, scale: state.scale, offset: state.offset, epoch, loss });
+                 state.play.frameIdx = state.snapshots.length - 1;
+                 renderAll();
+                 await new Promise(r => setTimeout(r, 0));
+            }
+        }
+        
+        startBtn.disabled = false;
+        stopBtn.disabled = true;
+    }
+    
+    function renderAll() {
+        const snapshot = state.snapshots.length > 0 ? state.snapshots[state.play.frameIdx] : { weights: state.weights, bias: state.bias, scale: state.scale, offset: state.offset, epoch: 0, loss: Infinity };
+        
+        const grid = Array.from({ length: 101 }, (_, i) => -1 + 2 * i / 100);
+        const targetData = grid.map(x => ({ x, y: state.targetFn(x) }));
+        const kanData = grid.map(x => ({ x, y: evaluate(x, snapshot.weights, snapshot.bias, snapshot.scale, snapshot.offset) }));
+        
+        const basisData = [];
+        for (let i = 0; i < state.numBasis; i++) {
+            const basisLine = grid.map(x => ({ x, y: snapshot.weights[i] * bspline(x, i, state.degree, state.knots) }));
+            basisData.push(basisLine);
+        }
+        
+        updateChart(targetData, kanData, basisData);
+        updateUIParams(snapshot);
+        updatePlaybackUI();
+    }
+    
+    function setupChart() {
+        const ctx = document.getElementById('main-chart').getContext('2d');
+        const basisColors = ['rgba(255, 159, 64, 0.5)', 'rgba(153, 102, 255, 0.5)', 'rgba(75, 192, 192, 0.5)', 'rgba(255, 99, 132, 0.5)', 'rgba(54, 162, 235, 0.5)'];
+
+        const datasets = [
+            { label: 'Target Function', data: [], borderColor: 'rgba(239, 68, 68, 1)', borderWidth: 3, pointRadius: 0, tension: 0.1 },
+            { label: 'KAN Output', data: [], borderColor: 'rgba(59, 130, 246, 1)', borderWidth: 3, pointRadius: 0, tension: 0.1, borderDash: [5, 5] },
+        ];
+        
+        for (let i = 0; i < 20; i++) {
+             datasets.push({
+                label: `Basis ${i+1}`,
+                data: [],
+                borderColor: basisColors[i % basisColors.length],
+                borderWidth: 1.5,
+                pointRadius: 0,
+                hidden: true
+            });
+        }
+        
+        chart = new Chart(ctx, {
+            type: 'line',
+            data: { datasets },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    x: { type: 'linear', position: 'bottom', title: { display: true, text: 'Input' } },
+                    y: { title: { display: true, text: 'Output' } }
+                },
+                plugins: {
+                    legend: { position: 'top' },
+                    tooltip: { mode: 'index', intersect: false }
+                },
+                animation: { duration: 0 }
+            }
+        });
+    }
+
+    function updateChart(targetData, kanData, basisData) {
+        chart.data.datasets[0].data = targetData;
+        chart.data.datasets[1].data = kanData;
+        
+        for(let i=0; i < state.numBasis; i++) {
+            chart.data.datasets[i+2].data = basisData[i];
+            chart.data.datasets[i+2].hidden = false;
+        }
+        for(let i=state.numBasis; i < 20; i++) {
+             chart.data.datasets[i+2].hidden = true;
+        }
+
+        chart.update();
+    }
+
+    function playAnimation() {
+        if (state.play.playing || state.snapshots.length === 0) return;
+        state.play.playing = true;
+        
+        function animate() {
+            if (!state.play.playing) return;
+            stepForward();
+            if (state.play.frameIdx < state.snapshots.length - 1) {
+                state.play.rafId = setTimeout(animate, state.play.delayMs);
+            } else {
+                state.play.playing = false;
+            }
+        }
+        animate();
+    }
+
+    function pauseAnimation() {
+        state.play.playing = false;
+        if(state.play.rafId) clearTimeout(state.play.rafId);
+        state.play.rafId = null;
+    }
+
+    function stepForward() {
+        if (state.snapshots.length === 0) return;
+        state.play.frameIdx = Math.min(state.snapshots.length - 1, state.play.frameIdx + 1);
+        renderAll();
+    }
+
+    function stepBackward() {
+        if (state.snapshots.length === 0) return;
+        state.play.frameIdx = Math.max(0, state.play.frameIdx - 1);
+        renderAll();
+    }
+
+    function updateUIParams(snapshot) {
+        numBasisLabel.textContent = state.numBasis;
+        degreeLabel.textContent = state.degree;
+        gridSizeLabel.textContent = state.gridSize;
+
+        const s = snapshot || { bias: state.bias, scale: state.scale, epoch: 0, loss: Infinity };
+        biasVal.textContent = s.bias.toFixed(3);
+        scaleVal.textContent = s.scale.toFixed(3);
+        epochVal.textContent = s.epoch;
+        lossVal.textContent = s.loss < 1e6 ? s.loss.toFixed(5) : '-';
+    }
+
+    function updatePlaybackUI() {
+        const maxFrames = Math.max(0, state.snapshots.length - 1);
+        snapshotSlider.max = maxFrames;
+        snapshotSlider.value = state.play.frameIdx;
+        frameLabel.textContent = `${state.play.frameIdx} / ${maxFrames}`;
+    }
+
+    numBasisSlider.addEventListener('input', e => { state.numBasis = Number(e.target.value); initModel(); });
+    degreeSlider.addEventListener('input', e => { state.degree = Number(e.target.value); initModel(); });
+    gridSizeSlider.addEventListener('input', e => { state.gridSize = Number(e.target.value); initModel(); });
+    targetFnInput.addEventListener('change', e => {
+        state.targetFnStr = e.target.value;
+        try {
+            state.targetFn = new Function('x', `return ${state.targetFnStr}`);
+            initModel();
+            targetFnInput.classList.remove('border-red-500');
+        } catch (err) {
+            console.error("Invalid function:", err);
+            targetFnInput.classList.add('border-red-500');
+        }
+    });
+
+    presetButtons.addEventListener('click', (e) => {
+        if (e.target.tagName === 'BUTTON') {
+            const fnStr = e.target.dataset.fn;
+            targetFnInput.value = fnStr;
+            targetFnInput.dispatchEvent(new Event('change'));
+            
+            document.querySelectorAll('#preset-buttons .tab-btn').forEach(btn => btn.classList.remove('tab-btn-active'));
+            e.target.classList.add('tab-btn-active');
+        }
+    });
+
+    startBtn.addEventListener('click', () => { if (!startBtn.disabled) runTraining(); });
+    stopBtn.addEventListener('click', () => { trainingAbort.stop = true; stopBtn.disabled = true; startBtn.disabled = false; });
+    resetBtn.addEventListener('click', () => {
+        trainingAbort.stop = true;
+        pauseAnimation();
+        initModel();
+        startBtn.disabled = false;
+        stopBtn.disabled = true;
+    });
+
+    playBtn.addEventListener('click', playAnimation);
+    pauseBtn.addEventListener('click', pauseAnimation);
+    stepFwdBtn.addEventListener('click', () => { pauseAnimation(); stepForward(); });
+    stepBackBtn.addEventListener('click', () => { pauseAnimation(); stepBackward(); });
+    snapshotSlider.addEventListener('input', e => { pauseAnimation(); state.play.frameIdx = Number(e.target.value); renderAll(); });
+    playSpeed.addEventListener('change', e => { state.play.delayMs = Number(e.target.value); });
+    
+    document.addEventListener('DOMContentLoaded', () => {
+        setupChart();
+        initModel();
+        document.querySelector('#preset-buttons button').classList.add('tab-btn-active');
+    });
+
+</script>
+
+</body>
+</html>

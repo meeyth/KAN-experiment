@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KAN Playground (1D)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            overscroll-behavior: none;
+        }
+        .control-panel::-webkit-scrollbar {
+            width: 6px;
+        }
+        .control-panel::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+        .control-panel::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 3px;
+        }
+        .control-panel::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+        .d3-line {
+            fill: none;
+            stroke-width: 2.5px;
+        }
+        .d3-line-thin {
+            fill: none;
+            stroke-width: 1.5px;
+            stroke-opacity: 0.7;
+        }
+        .d3-axis-grid line {
+            stroke: #e2e8f0;
+        }
+        .d3-axis-grid .domain {
+            stroke: none;
+        }
+        .d3-axis text {
+            font-size: 10px;
+            fill: #64748b;
+        }
+        .control-label {
+            color: #475569;
+            font-weight: 500;
+        }
+        .slider-value {
+            color: #1e293b;
+            font-weight: 600;
+        }
+        /* Custom tooltip for D3 */
+        .d3-tooltip {
+            position: absolute;
+            text-align: center;
+            padding: 8px;
+            font-size: 12px;
+            background: #1e293b;
+            color: white;
+            border: 0px;
+            border-radius: 8px;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+    </style>
+</head>
+<body class="bg-slate-100 text-slate-800 antialiased">
+
+    <div class="flex flex-col md:flex-row h-screen">
+        <!-- Control Panel -->
+        <div class="w-full md:w-80 lg:w-96 bg-white border-r border-slate-200 p-4 md:p-6 shadow-lg overflow-y-auto control-panel">
+            <div class="flex items-center mb-6">
+                <svg class="w-8 h-8 text-indigo-600 mr-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M10.5 6a7.5 7.5 0 100 12h-3a7.5 7.5 0 000-12h3z" />
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M10.5 6a7.5 7.5 0 017.5 7.5h-7.5a7.5 7.5 0 000-15h-3A7.5 7.5 0 007.5 9h3" />
+                </svg>
+                <h1 class="text-2xl font-bold text-slate-900">KAN Playground</h1>
+            </div>
+            <p class="text-sm text-slate-500 mb-6">An interactive visualization of a 1D Kolmogorov-Arnold Network. Watch how learnable activation functions on edges adapt to fit the data.</p>
+
+            <!-- Controls -->
+            <div class="space-y-6">
+                <!-- Training Controls -->
+                <div>
+                    <h3 class="text-lg font-semibold text-slate-800 mb-3">Training</h3>
+                    <div class="flex items-center space-x-2">
+                        <button id="play-pause-button" class="flex-1 bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg shadow-sm hover:bg-indigo-700 transition-colors flex items-center justify-center">
+                            <svg id="play-icon" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clip-rule="evenodd" /></svg>
+                            <svg id="pause-icon" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2 hidden" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8 7a1 1 0 00-1 1v4a1 1 0 001 1h4a1 1 0 001-1V8a1 1 0 00-1-1H8z" clip-rule="evenodd" /></svg>
+                            <span id="play-pause-text">Play</span>
+                        </button>
+                        <button id="reset-button" class="bg-slate-200 text-slate-700 font-semibold py-2 px-4 rounded-lg hover:bg-slate-300 transition-colors flex items-center justify-center">
+                           <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.885-.666A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566z" clip-rule="evenodd" /></svg>
+                            Reset
+                        </button>
+                    </div>
+                    <div class="mt-4 flex justify-between text-sm">
+                        <span class="font-medium text-slate-500">Epoch: <span id="epoch-counter" class="font-bold text-slate-700">0</span></span>
+                        <span class="font-medium text-slate-500">Loss: <span id="loss-value" class="font-bold text-slate-700">N/A</span></span>
+                    </div>
+                </div>
+
+                <!-- Data Configuration -->
+                <div>
+                    <h3 class="text-lg font-semibold text-slate-800 mb-3">Data</h3>
+                    <label for="data-select" class="text-sm control-label">Target Function</label>
+                    <select id="data-select" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-slate-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md">
+                        <option value="quadratic" selected>y = x²</option>
+                        <option value="sine">y = sin(πx)</option>
+                        <option value="step">y = step(x)</option>
+                        <option value="complex">y = sin(2πx) + 0.5x³</option>
+                    </select>
+                </div>
+
+                <!-- KAN Architecture -->
+                <div>
+                    <h3 class="text-lg font-semibold text-slate-800 mb-3">Architecture</h3>
+                    <div class="space-y-4">
+                        <div>
+                            <label for="hidden-neurons-slider" class="text-sm control-label flex justify-between">
+                                Hidden Neurons
+                                <span id="hidden-neurons-value" class="slider-value">4</span>
+                            </label>
+                            <input id="hidden-neurons-slider" type="range" min="1" max="8" value="4" class="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer">
+                        </div>
+                        <div>
+                            <label for="spline-points-slider" class="text-sm control-label flex justify-between">
+                                Spline Points (Complexity)
+                                <span id="spline-points-value" class="slider-value">10</span>
+                            </label>
+                            <input id="spline-points-slider" type="range" min="3" max="20" value="10" class="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer">
+                        </div>
+                         <div>
+                            <label for="learning-rate-slider" class="text-sm control-label flex justify-between">
+                                Learning Rate
+                                <span id="learning-rate-value" class="slider-value">0.01</span>
+                            </label>
+                            <input id="learning-rate-slider" type="range" min="0.0001" max="0.1" step="0.0001" value="0.01" class="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Visualization Area -->
+        <div class="flex-1 bg-slate-50 p-4 md:p-6 overflow-hidden">
+            <div class="w-full h-full flex flex-col space-y-4">
+                <!-- Main Output Plot -->
+                <div class="flex-1 bg-white rounded-xl shadow-md p-4">
+                    <h3 class="text-md font-semibold text-slate-800 mb-2">KAN Output vs True Function</h3>
+                    <div id="main-plot" class="w-full h-[90%]"></div>
+                </div>
+                <!-- Learned Functions -->
+                <div class="bg-white rounded-xl shadow-md p-4 h-1/2 md:h-2/5">
+                     <h3 class="text-md font-semibold text-slate-800 mb-2">Learned Edge Functions (φ)</h3>
+                     <div id="function-plots" class="w-full h-[85%] grid grid-cols-4 gap-4 overflow-y-auto"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div id="tooltip" class="d3-tooltip"></div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // --- UI Elements ---
+            const playPauseButton = document.getElementById('play-pause-button');
+            const playPauseText = document.getElementById('play-pause-text');
+            const playIcon = document.getElementById('play-icon');
+            const pauseIcon = document.getElementById('pause-icon');
+            const resetButton = document.getElementById('reset-button');
+            const epochCounter = document.getElementById('epoch-counter');
+            const lossValue = document.getElementById('loss-value');
+            const dataSelect = document.getElementById('data-select');
+            const hiddenNeuronsSlider = document.getElementById('hidden-neurons-slider');
+            const hiddenNeuronsValue = document.getElementById('hidden-neurons-value');
+            const splinePointsSlider = document.getElementById('spline-points-slider');
+            const splinePointsValue = document.getElementById('spline-points-value');
+            const learningRateSlider = document.getElementById('learning-rate-slider');
+            const learningRateValue = document.getElementById('learning-rate-value');
+            const tooltip = d3.select("#tooltip");
+            
+            // --- State Variables ---
+            let isPlaying = false;
+            let animationFrameId;
+            let epoch = 0;
+            let currentLoss = 0;
+            
+            // --- KAN & Data Parameters ---
+            let config = {
+                hiddenNeurons: 4,
+                splinePoints: 10,
+                learningRate: 0.01,
+                dataType: 'quadratic',
+                numDataPoints: 100,
+                xRange: [-1, 1]
+            };
+            
+            let data = [];
+            let model = {};
+
+            // --- D3 Visualization Setup ---
+            let mainSvg, mainXScale, mainYScale;
+            let functionSvgs = [];
+
+            // --- KAN Model Logic ---
+            // Simplified B-spline implementation using Gaussian basis functions (Radial Basis Functions)
+            // phi(x) = sum(c_i * exp(-(x - mu_i)^2 / (2 * sigma^2)))
+            // The learnable parameters are the coefficients `c_i`.
+            
+            function initializeModel() {
+                model = {
+                    layer1: [], // Functions from input to hidden layer
+                    layer2: []  // Functions from hidden to output layer
+                };
+                
+                const grid = d3.range(config.splinePoints).map(i => config.xRange[0] + (i / (config.splinePoints - 1)) * (config.xRange[1] - config.xRange[0]));
+                const sigma = (config.xRange[1] - config.xRange[0]) / config.splinePoints;
+
+                for (let i = 0; i < config.hiddenNeurons; i++) {
+                    // Layer 1: input (x) -> hidden_i
+                    model.layer1.push({
+                        coeffs: Array(config.splinePoints).fill(0).map(() => (Math.random() - 0.5) * 0.1),
+                        grid: grid,
+                        sigma: sigma
+                    });
+                    // Layer 2: hidden_i -> output (summed)
+                    model.layer2.push({
+                        coeffs: Array(config.splinePoints).fill(0).map(() => (Math.random() - 0.5) * 0.1),
+                        grid: grid,
+                        sigma: sigma
+                    });
+                }
+            }
+
+            function evaluateSpline(x, spline) {
+                return d3.sum(spline.coeffs, (c, i) => {
+                    const basis = Math.exp(-Math.pow(x - spline.grid[i], 2) / (2 * Math.pow(spline.sigma, 2)));
+                    return c * basis;
+                });
+            }
+
+            function forwardPass(x) {
+                const hiddenValues = model.layer1.map(spline => evaluateSpline(x, spline));
+                const outputValues = model.layer2.map((spline, i) => evaluateSpline(hiddenValues[i], spline));
+                const finalOutput = d3.sum(outputValues);
+                
+                return { finalOutput, hiddenValues, outputValues };
+            }
+
+            function trainStep() {
+                let totalLoss = 0;
+                // Create gradients object, initialized to zeros
+                const grads = {
+                    layer1: model.layer1.map(s => ({ coeffs: Array(s.coeffs.length).fill(0) })),
+                    layer2: model.layer2.map(s => ({ coeffs: Array(s.coeffs.length).fill(0) }))
+                };
+
+                for (const d of data) {
+                    const { x, y } = d;
+                    
+                    // --- Forward Pass ---
+                    const hiddenValues = model.layer1.map(spline => evaluateSpline(x, spline));
+                    const outputValues = model.layer2.map((spline, i) => evaluateSpline(hiddenValues[i], spline));
+                    const y_pred = d3.sum(outputValues);
+
+                    // --- Loss Calculation ---
+                    const loss = y_pred - y;
+                    totalLoss += loss * loss;
+
+                    // --- Backward Pass (Gradient Calculation) ---
+                    const dL_dy_pred = 2 * loss;
+                    
+                    // Gradients for Layer 2
+                    for (let i = 0; i < config.hiddenNeurons; i++) {
+                        const h_i = hiddenValues[i];
+                        for (let j = 0; j < config.splinePoints; j++) {
+                            const basis_2 = Math.exp(-Math.pow(h_i - model.layer2[i].grid[j], 2) / (2 * Math.pow(model.layer2[i].sigma, 2)));
+                            grads.layer2[i].coeffs[j] += dL_dy_pred * basis_2;
+                        }
+                    }
+
+                    // Gradients for Layer 1
+                    for (let i = 0; i < config.hiddenNeurons; i++) {
+                        const h_i = hiddenValues[i];
+                        
+                        // dL/dh_i = dL/dy_pred * sum_k(dy_pred/d_out_k * d_out_k/dh_i)
+                        // Since y_pred = sum(out_k) and out_k = phi_2_k(h_k), this simplifies.
+                        // The derivative of y_pred with respect to h_i is the derivative of the spline phi_2_i.
+                        let d_phi2_i_dh_i = 0;
+                        for(let j=0; j < config.splinePoints; j++) {
+                             const basis_2 = Math.exp(-Math.pow(h_i - model.layer2[i].grid[j], 2) / (2 * Math.pow(model.layer2[i].sigma, 2)));
+                             const deriv_basis_2 = - (h_i - model.layer2[i].grid[j]) / Math.pow(model.layer2[i].sigma, 2) * basis_2;
+                             d_phi2_i_dh_i += model.layer2[i].coeffs[j] * deriv_basis_2;
+                        }
+                        
+                        const dL_dh_i = dL_dy_pred * d_phi2_i_dh_i;
+
+                        for (let j = 0; j < config.splinePoints; j++) {
+                            const basis_1 = Math.exp(-Math.pow(x - model.layer1[i].grid[j], 2) / (2 * Math.pow(model.layer1[i].sigma, 2)));
+                            grads.layer1[i].coeffs[j] += dL_dh_i * basis_1;
+                        }
+                    }
+                }
+                
+                // --- Update Weights (Gradient Descent) ---
+                const numPoints = data.length;
+                for (let i = 0; i < config.hiddenNeurons; i++) {
+                    for (let j = 0; j < config.splinePoints; j++) {
+                        model.layer1[i].coeffs[j] -= config.learningRate * grads.layer1[i].coeffs[j] / numPoints;
+                        model.layer2[i].coeffs[j] -= config.learningRate * grads.layer2[i].coeffs[j] / numPoints;
+                    }
+                }
+
+                currentLoss = totalLoss / numPoints;
+                epoch++;
+            }
+
+            // --- Data Generation ---
+            function generateData() {
+                data = [];
+                const [minX, maxX] = config.xRange;
+                const step = (maxX - minX) / (config.numDataPoints - 1);
+                
+                let targetFunc;
+                switch(config.dataType) {
+                    case 'quadratic': targetFunc = x => x * x; break;
+                    case 'sine': targetFunc = x => Math.sin(Math.PI * x); break;
+                    case 'step': targetFunc = x => (x > 0 ? 1 : -1); break;
+                    case 'complex': targetFunc = x => Math.sin(2 * Math.PI * x) + 0.5 * Math.pow(x, 3); break;
+                }
+
+                for (let i = 0; i < config.numDataPoints; i++) {
+                    const x = minX + i * step;
+                    data.push({ x: x, y: targetFunc(x) });
+                }
+            }
+
+
+            // --- Visualization Logic ---
+            function setupVisualizations() {
+                // Clear existing plots
+                d3.select("#main-plot").selectAll("*").remove();
+                d3.select("#function-plots").selectAll("*").remove();
+                functionSvgs = [];
+
+                // Main plot setup
+                const mainPlotDiv = document.getElementById('main-plot');
+                const mainMargin = {top: 10, right: 20, bottom: 30, left: 30};
+                const mainWidth = mainPlotDiv.clientWidth - mainMargin.left - mainMargin.right;
+                const mainHeight = mainPlotDiv.clientHeight - mainMargin.top - mainMargin.bottom;
+
+                mainSvg = d3.select("#main-plot").append("svg")
+                    .attr("width", mainWidth + mainMargin.left + mainMargin.right)
+                    .attr("height", mainHeight + mainMargin.top + mainMargin.bottom)
+                    .append("g")
+                    .attr("transform", `translate(${mainMargin.left},${mainMargin.top})`);
+
+                mainXScale = d3.scaleLinear().domain(config.xRange).range([0, mainWidth]);
+                const yExtent = d3.extent(data, d => d.y);
+                const yPadding = (yExtent[1] - yExtent[0]) * 0.2;
+                mainYScale = d3.scaleLinear().domain([yExtent[0] - yPadding, yExtent[1] + yPadding]).range([mainHeight, 0]);
+
+                mainSvg.append("g").attr("class", "d3-axis-grid").call(d3.axisLeft(mainYScale).ticks(5).tickSize(-mainWidth));
+                mainSvg.append("g").attr("class", "d3-axis-grid").attr("transform", `translate(0,${mainHeight})`).call(d3.axisBottom(mainXScale).ticks(5).tickSize(-mainHeight));
+
+                mainSvg.append("g").attr("class", "d3-axis").call(d3.axisLeft(mainYScale).ticks(5));
+                mainSvg.append("g").attr("class", "d3-axis").attr("transform", `translate(0,${mainHeight})`).call(d3.axisBottom(mainXScale).ticks(5));
+                
+                // Paths for data/predictions
+                mainSvg.append("path").attr("id", "true-function-line").attr("class", "d3-line").style("stroke", "#94a3b8");
+                mainSvg.append("path").attr("id", "predicted-function-line").attr("class", "d3-line").style("stroke", "#4f46e5");
+
+                // Function plots setup
+                const functionPlotContainer = d3.select("#function-plots");
+                functionPlotContainer.style("grid-template-columns", `repeat(${Math.min(config.hiddenNeurons, 4)}, 1fr)`);
+
+                for (let i = 0; i < config.hiddenNeurons * 2; i++) {
+                    const isLayer1 = i < config.hiddenNeurons;
+                    const neuronIndex = i % config.hiddenNeurons;
+
+                    const container = functionPlotContainer.append("div").attr("class", "relative w-full h-full");
+                    
+                    const funcMargin = {top: 15, right: 10, bottom: 20, left: 20};
+                    const funcWidth = container.node().clientWidth - funcMargin.left - funcMargin.right;
+                    const funcHeight = container.node().clientHeight - funcMargin.top - funcMargin.bottom;
+
+                    const svg = container.append("svg")
+                        .attr("width", "100%")
+                        .attr("height", "100%")
+                        .attr("viewBox", `0 0 ${container.node().clientWidth} ${container.node().clientHeight}`)
+                        .append("g")
+                        .attr("transform", `translate(${funcMargin.left},${funcMargin.top})`);
+                    
+                    const title = isLayer1 ? `φ₁,${neuronIndex+1}(x)` : `φ₂,${neuronIndex+1}(h)`;
+                    svg.append("text")
+                        .attr("x", funcWidth / 2)
+                        .attr("y", -5)
+                        .attr("text-anchor", "middle")
+                        .style("font-size", "12px")
+                        .style("font-weight", "500")
+                        .text(title);
+
+                    const xScale = d3.scaleLinear().domain(config.xRange).range([0, funcWidth]);
+                    const yScale = d3.scaleLinear().domain([-1, 1]).range([funcHeight, 0]);
+
+                    svg.append("g").attr("class", "d3-axis").call(d3.axisLeft(yScale).ticks(3));
+                    svg.append("g").attr("class", "d3-axis").attr("transform", `translate(0,${funcHeight})`).call(d3.axisBottom(xScale).ticks(3));
+
+                    svg.append("path").attr("class", "d3-line-thin").style("stroke", isLayer1 ? "#0ea5e9" : "#f97316");
+
+                    functionSvgs.push({ svg, xScale, yScale });
+                }
+            }
+
+            function updateVisualizations() {
+                // Update counters
+                epochCounter.textContent = epoch;
+                lossValue.textContent = currentLoss.toExponential(3);
+
+                // --- Update Main Plot ---
+                // True function
+                mainSvg.select("#true-function-line")
+                    .datum(data)
+                    .attr("d", d3.line().x(d => mainXScale(d.x)).y(d => mainYScale(d.y)));
+
+                // Predicted function
+                const predictionData = data.map(d => ({ x: d.x, y: forwardPass(d.x).finalOutput }));
+                mainSvg.select("#predicted-function-line")
+                    .datum(predictionData)
+                    .attr("d", d3.line().x(d => mainXScale(d.x)).y(d => mainYScale(d.y)));
+                
+                // --- Update Function Plots ---
+                functionSvgs.forEach((fs, i) => {
+                    const isLayer1 = i < config.hiddenNeurons;
+                    const spline = isLayer1 ? model.layer1[i % config.hiddenNeurons] : model.layer2[i % config.hiddenNeurons];
+                    
+                    const lineData = fs.xScale.ticks(50).map(x_val => ({
+                        x: x_val,
+                        y: evaluateSpline(x_val, spline)
+                    }));
+                    
+                    // Dynamically adjust y-scale for visibility
+                    const yExtent = d3.extent(lineData, d => d.y);
+                    const yPadding = Math.max(0.1, (yExtent[1] - yExtent[0]) * 0.2);
+                    fs.yScale.domain([yExtent[0] - yPadding, yExtent[1] + yPadding]);
+                    
+                    // Update axis
+                    fs.svg.select(".d3-axis:first-of-type").call(d3.axisLeft(fs.yScale).ticks(3));
+
+                    fs.svg.select(".d3-line-thin")
+                        .datum(lineData)
+                        .attr("d", d3.line().x(d => fs.xScale(d.x)).y(d => fs.yScale(d.y)));
+                });
+            }
+
+
+            // --- Control Handlers ---
+            function handlePlayPause() {
+                isPlaying = !isPlaying;
+                if (isPlaying) {
+                    playPauseText.textContent = 'Pause';
+                    playIcon.classList.add('hidden');
+                    pauseIcon.classList.remove('hidden');
+                    animationFrameId = requestAnimationFrame(gameLoop);
+                } else {
+                    playPauseText.textContent = 'Play';
+                    playIcon.classList.remove('hidden');
+                    pauseIcon.classList.add('hidden');
+                    cancelAnimationFrame(animationFrameId);
+                }
+            }
+            
+            function gameLoop() {
+                if (!isPlaying) return;
+                
+                for(let i=0; i<5; i++) { // Run a few train steps per frame for speed
+                    trainStep();
+                }
+                updateVisualizations();
+                
+                animationFrameId = requestAnimationFrame(gameLoop);
+            }
+
+            function reset() {
+                isPlaying = false;
+                playPauseText.textContent = 'Play';
+                playIcon.classList.remove('hidden');
+                pauseIcon.classList.add('hidden');
+                cancelAnimationFrame(animationFrameId);
+                
+                epoch = 0;
+                currentLoss = 0;
+                
+                config.hiddenNeurons = parseInt(hiddenNeuronsSlider.value);
+                config.splinePoints = parseInt(splinePointsSlider.value);
+                config.learningRate = parseFloat(learningRateSlider.value);
+                config.dataType = dataSelect.value;
+                
+                generateData();
+                initializeModel();
+                setupVisualizations();
+                updateVisualizations();
+            }
+
+            // --- Event Listeners ---
+            playPauseButton.addEventListener('click', handlePlayPause);
+            resetButton.addEventListener('click', reset);
+            
+            dataSelect.addEventListener('change', reset);
+            hiddenNeuronsSlider.addEventListener('input', e => {
+                hiddenNeuronsValue.textContent = e.target.value;
+            });
+            hiddenNeuronsSlider.addEventListener('change', reset);
+            
+            splinePointsSlider.addEventListener('input', e => {
+                splinePointsValue.textContent = e.target.value;
+            });
+            splinePointsSlider.addEventListener('change', reset);
+
+            learningRateSlider.addEventListener('input', e => {
+                learningRateValue.textContent = parseFloat(e.target.value).toExponential(1);
+            });
+            learningRateSlider.addEventListener('change', reset);
+
+            window.addEventListener('resize', reset);
+
+            // --- Initial Load ---
+            reset();
+        });
+    </script>
+</body>
+</html>
